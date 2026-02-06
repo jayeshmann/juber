@@ -1,6 +1,11 @@
 const tripService = require('../services/trip.service');
-const { createTripSchema, startTripSchema, endTripSchema, cancelTripSchema } = require('../utils/validators');
-const { asyncHandler } = require('../middleware/error-handler');
+const {
+  createTripSchema,
+  startTripSchema,
+  endTripSchema,
+  cancelTripSchema,
+} = require('../utils/validators');
+const { asyncHandler, AppError } = require('../middleware/error-handler');
 
 /**
  * Create trip from accepted ride
@@ -9,9 +14,12 @@ const { asyncHandler } = require('../middleware/error-handler');
 const createTrip = asyncHandler(async (req, res) => {
   const data = createTripSchema.parse(req.body);
 
-  const trip = await tripService.createTrip(data.rideRequestId);
-
-  res.status(201).json(trip);
+  try {
+    const trip = await tripService.createTrip(data.rideRequestId);
+    res.status(201).json(trip);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 /**
@@ -38,9 +46,12 @@ const startTrip = asyncHandler(async (req, res) => {
   const { tripId } = req.params;
   const data = startTripSchema.parse(req.body);
 
-  const result = await tripService.startTrip(tripId, data);
-
-  res.json(result);
+  try {
+    const result = await tripService.startTrip(tripId, data);
+    res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 /**
@@ -51,9 +62,12 @@ const pauseTrip = asyncHandler(async (req, res) => {
   const { tripId } = req.params;
   const { reason } = req.body;
 
-  const result = await tripService.pauseTrip(tripId, reason);
-
-  res.json(result);
+  try {
+    const result = await tripService.pauseTrip(tripId, reason);
+    res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 /**
@@ -63,9 +77,12 @@ const pauseTrip = asyncHandler(async (req, res) => {
 const resumeTrip = asyncHandler(async (req, res) => {
   const { tripId } = req.params;
 
-  const result = await tripService.resumeTrip(tripId);
-
-  res.json(result);
+  try {
+    const result = await tripService.resumeTrip(tripId);
+    res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 /**
@@ -76,9 +93,12 @@ const endTrip = asyncHandler(async (req, res) => {
   const { tripId } = req.params;
   const data = endTripSchema.parse(req.body);
 
-  const result = await tripService.endTrip(tripId, data);
-
-  res.json(result);
+  try {
+    const result = await tripService.endTrip(tripId, data);
+    res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 /**
@@ -89,9 +109,12 @@ const cancelTrip = asyncHandler(async (req, res) => {
   const { tripId } = req.params;
   const data = cancelTripSchema.parse(req.body);
 
-  const result = await tripService.cancelTrip(tripId, data);
-
-  res.json(result);
+  try {
+    const result = await tripService.cancelTrip(tripId, data);
+    res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 /**
@@ -101,9 +124,12 @@ const cancelTrip = asyncHandler(async (req, res) => {
 const getTripReceipt = asyncHandler(async (req, res) => {
   const { tripId } = req.params;
 
-  const receipt = await tripService.generateReceipt(tripId);
-
-  res.json(receipt);
+  try {
+    const receipt = await tripService.generateReceipt(tripId);
+    res.json(receipt);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 });
 
 module.exports = {
@@ -114,5 +140,5 @@ module.exports = {
   resumeTrip,
   endTrip,
   cancelTrip,
-  getTripReceipt
+  getTripReceipt,
 };

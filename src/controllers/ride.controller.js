@@ -1,5 +1,8 @@
 const dispatchService = require('../services/dispatch.service');
-const { rideRequestSchema, driverResponseSchema } = require('../utils/validators');
+const {
+  rideRequestSchema,
+  driverResponseSchema,
+} = require('../utils/validators');
 const { asyncHandler, AppError } = require('../middleware/error-handler');
 
 /**
@@ -12,7 +15,7 @@ const createRideRequest = asyncHandler(async (req, res) => {
   if (!idempotencyKey) {
     return res.status(400).json({
       error: 'Missing Idempotency-Key header',
-      message: 'All ride requests must include an Idempotency-Key header'
+      message: 'All ride requests must include an Idempotency-Key header',
     });
   }
 
@@ -20,7 +23,7 @@ const createRideRequest = asyncHandler(async (req, res) => {
 
   const result = await dispatchService.createRideRequest({
     ...data,
-    idempotencyKey
+    idempotencyKey,
   });
 
   res.status(201).json(result);
@@ -33,13 +36,24 @@ const createRideRequest = asyncHandler(async (req, res) => {
 const getRideDetails = asyncHandler(async (req, res) => {
   const { rideId } = req.params;
 
-  const ride = await dispatchService.getRideDetails(rideId);
-
-  if (!ride) {
+  // Validate UUID format
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(rideId)) {
     return res.status(404).json({ error: 'Ride not found' });
   }
 
-  res.json(ride);
+  try {
+    const ride = await dispatchService.getRideDetails(rideId);
+
+    if (!ride) {
+      return res.status(404).json({ error: 'Ride not found' });
+    }
+
+    res.json(ride);
+  } catch (err) {
+    return res.status(404).json({ error: 'Ride not found' });
+  }
 });
 
 /**
@@ -77,10 +91,9 @@ const cancelRide = asyncHandler(async (req, res) => {
 
   // Update ride status
   const { query } = require('../db/postgres');
-  await query(
-    `UPDATE ride_requests SET status = 'CANCELLED' WHERE id = $1`,
-    [rideId]
-  );
+  await query(`UPDATE ride_requests SET status = 'CANCELLED' WHERE id = $1`, [
+    rideId,
+  ]);
 
   res.json({ status: 'CANCELLED', rideId, reason });
 });
@@ -90,5 +103,5 @@ module.exports = {
   getRideDetails,
   handleDriverResponse,
   checkTimeout,
-  cancelRide
+  cancelRide,
 };

@@ -27,7 +27,7 @@ describe('Driver Location Service', () => {
       longitude: 77.5946,
       timestamp: new Date().toISOString(),
       heading: 45,
-      speed: 30
+      speed: 30,
     };
 
     it('should accept a valid location update', async () => {
@@ -39,7 +39,7 @@ describe('Driver Location Service', () => {
       expect(response.body).toMatchObject({
         success: true,
         driverId,
-        geoCell: expect.any(String)
+        geoCell: expect.any(String),
       });
     });
 
@@ -50,9 +50,15 @@ describe('Driver Location Service', () => {
         .expect(200);
 
       // Verify location was stored in Redis
-      const position = await redis.geopos('drivers:locations:bangalore', driverId);
+      const position = await redis.geopos(
+        'drivers:locations:bangalore',
+        driverId,
+      );
       expect(position[0]).not.toBeNull();
-      expect(parseFloat(position[0][0])).toBeCloseTo(validLocation.longitude, 4);
+      expect(parseFloat(position[0][0])).toBeCloseTo(
+        validLocation.longitude,
+        4,
+      );
       expect(parseFloat(position[0][1])).toBeCloseTo(validLocation.latitude, 4);
     });
 
@@ -62,7 +68,7 @@ describe('Driver Location Service', () => {
         .send({ latitude: 'invalid', longitude: 77.5946 })
         .expect(400);
 
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error || response.body.details).toBeDefined();
     });
 
     it('should reject coordinates out of range', async () => {
@@ -71,7 +77,7 @@ describe('Driver Location Service', () => {
         .send({ latitude: 91, longitude: 181 })
         .expect(400);
 
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error || response.body.details).toBeDefined();
     });
 
     it('should handle high-frequency updates (1-2/sec simulation)', async () => {
@@ -83,13 +89,13 @@ describe('Driver Location Service', () => {
             .send({
               latitude: 12.9716 + i * 0.0001,
               longitude: 77.5946 + i * 0.0001,
-              timestamp: new Date().toISOString()
-            })
+              timestamp: new Date().toISOString(),
+            }),
         );
       }
 
       const responses = await Promise.all(updates);
-      responses.forEach(res => {
+      responses.forEach((res) => {
         expect(res.status).toBe(200);
       });
     });
@@ -98,14 +104,34 @@ describe('Driver Location Service', () => {
   describe('GET /api/v1/drivers/nearby', () => {
     const seedDriverLocations = async () => {
       const drivers = [
-        { id: 'd1000000-0000-0000-0000-000000000001', lat: 12.9716, lng: 77.5946 },
-        { id: 'd1000000-0000-0000-0000-000000000002', lat: 12.9720, lng: 77.5950 },
-        { id: 'd1000000-0000-0000-0000-000000000003', lat: 12.9800, lng: 77.6000 }
+        {
+          id: 'd1000000-0000-0000-0000-000000000001',
+          lat: 12.9716,
+          lng: 77.5946,
+        },
+        {
+          id: 'd1000000-0000-0000-0000-000000000002',
+          lat: 12.972,
+          lng: 77.595,
+        },
+        { id: 'd1000000-0000-0000-0000-000000000003', lat: 12.98, lng: 77.6 },
       ];
 
       for (const driver of drivers) {
-        await redis.geoadd('drivers:locations:bangalore', driver.lng, driver.lat, driver.id);
-        await redis.hset(`driver:${driver.id}:meta`, 'status', 'ONLINE', 'vehicleType', 'ECONOMY');
+        await redis.geoadd(
+          'drivers:locations:bangalore',
+          driver.lng,
+          driver.lat,
+          driver.id,
+        );
+        await redis.hset(
+          `driver:${driver.id}:meta`,
+          'status',
+          'ONLINE',
+          'vehicleType',
+          'ECONOMY',
+        );
+        await redis.set(`driver:${driver.id}:presence`, '1', 'EX', 30);
       }
     };
 
@@ -120,7 +146,7 @@ describe('Driver Location Service', () => {
           latitude: 12.9716,
           longitude: 77.5946,
           radiusKm: 1,
-          region: 'bangalore'
+          region: 'bangalore',
         })
         .expect(200);
 
@@ -136,11 +162,11 @@ describe('Driver Location Service', () => {
           longitude: 77.5946,
           radiusKm: 5,
           region: 'bangalore',
-          vehicleType: 'ECONOMY'
+          vehicleType: 'ECONOMY',
         })
         .expect(200);
 
-      response.body.drivers.forEach(driver => {
+      response.body.drivers.forEach((driver) => {
         expect(driver.vehicleType).toBe('ECONOMY');
       });
     });
@@ -152,11 +178,11 @@ describe('Driver Location Service', () => {
           latitude: 12.9716,
           longitude: 77.5946,
           radiusKm: 5,
-          region: 'bangalore'
+          region: 'bangalore',
         })
         .expect(200);
 
-      const distances = response.body.drivers.map(d => d.distanceKm);
+      const distances = response.body.drivers.map((d) => d.distanceKm);
       for (let i = 1; i < distances.length; i++) {
         expect(distances[i]).toBeGreaterThanOrEqual(distances[i - 1]);
       }
@@ -164,7 +190,11 @@ describe('Driver Location Service', () => {
 
     it('should only return ONLINE drivers', async () => {
       // Set one driver to OFFLINE
-      await redis.hset('driver:d1000000-0000-0000-0000-000000000001:meta', 'status', 'OFFLINE');
+      await redis.hset(
+        'driver:d1000000-0000-0000-0000-000000000001:meta',
+        'status',
+        'OFFLINE',
+      );
 
       const response = await request(app)
         .get('/api/v1/drivers/nearby')
@@ -172,12 +202,12 @@ describe('Driver Location Service', () => {
           latitude: 12.9716,
           longitude: 77.5946,
           radiusKm: 5,
-          region: 'bangalore'
+          region: 'bangalore',
         })
         .expect(200);
 
       const offlineDriver = response.body.drivers.find(
-        d => d.driverId === 'd1000000-0000-0000-0000-000000000001'
+        (d) => d.driverId === 'd1000000-0000-0000-0000-000000000001',
       );
       expect(offlineDriver).toBeUndefined();
     });
@@ -193,7 +223,7 @@ describe('Driver Location Service', () => {
         .send({
           latitude: 12.9716,
           longitude: 77.5946,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         })
         .expect(200);
 

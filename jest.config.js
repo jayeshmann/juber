@@ -6,10 +6,12 @@ module.exports = {
   verbose: true,
   forceExit: true,
   detectOpenHandles: true,
-  collectCoverageFrom: [
-    'src/**/*.js',
-    '!src/server.js'
-  ],
+  collectCoverageFrom: ['src/**/*.js', '!src/server.js'],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html']
+  coverageReporters: ['text', 'lcov', 'html'],
+  // Transform ESM packages to CommonJS
+  transformIgnorePatterns: ['node_modules/(?!(uuid)/)'],
+  transform: {
+    '^.+\\.js$': 'babel-jest',
+  },
 };

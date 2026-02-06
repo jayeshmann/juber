@@ -1,61 +1,82 @@
-const { GenericContainer, Wait, Network } = require('testcontainers');
-const { PostgreSqlContainer } = require('@testcontainers/postgresql');
-const { RedisContainer } = require('@testcontainers/redis');
-const { KafkaContainer } = require('@testcontainers/kafka');
+/**
+ * Test Setup
+ *
+ * Uses the existing Docker Compose services for testing.
+ * Run `npm run docker:up` before running tests.
+ */
 
-let postgresContainer;
-let redisContainer;
-let kafkaContainer;
-let network;
+const config = require('../src/config');
+
+// Set test environment variables to use Docker Compose services
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = config.DATABASE_URL;
+process.env.REDIS_URL = config.REDIS_URL;
+process.env.KAFKA_BROKERS = config.KAFKA_BROKERS.join(',');
+
+let redisClient;
+let pgPool;
 
 beforeAll(async () => {
-  // Create a network for containers to communicate
-  network = await new Network().start();
+  // Import clients after env vars are set
+  const { getRedisClient } = require('../src/db/redis');
+  const { getPool } = require('../src/db/postgres');
 
-  // Start PostgreSQL
-  postgresContainer = await new PostgreSqlContainer('postgres:16-alpine')
-    .withNetwork(network)
-    .withNetworkAliases('postgres')
-    .withDatabase('juber_db')
-    .withUsername('juber')
-    .withPassword('juber_secret')
-    .withCopyFilesToContainer([{
-      source: './scripts/init-db.sql',
-      target: '/docker-entrypoint-initdb.d/init-db.sql'
-    }])
-    .withWaitStrategy(Wait.forHealthCheck())
-    .start();
+  redisClient = getRedisClient();
+  pgPool = getPool();
 
-  // Start Redis
-  redisContainer = await new RedisContainer('redis:7-alpine')
-    .withNetwork(network)
-    .withNetworkAliases('redis')
-    .start();
+  // Wait for connections
+  try {
+    await redisClient.ping();
+    console.log('Redis connected for tests');
+  } catch (err) {
+    console.warn('Redis not available, tests may fail:', err.message);
+  }
 
-  // Start Kafka
-  kafkaContainer = await new KafkaContainer('confluentinc/cp-kafka:7.5.0')
-    .withNetwork(network)
-    .withNetworkAliases('kafka')
-    .withExposedPorts(9093)
-    .start();
-
-  // Set environment variables for tests
-  process.env.DATABASE_URL = postgresContainer.getConnectionUri();
-  process.env.REDIS_URL = `redis://${redisContainer.getHost()}:${redisContainer.getPort()}`;
-  process.env.KAFKA_BROKERS = kafkaContainer.getBootstrapServers();
-  process.env.NODE_ENV = 'test';
-  process.env.PORT = '0'; // Random port for tests
-}, 120000);
-
-afterAll(async () => {
-  if (postgresContainer) await postgresContainer.stop();
-  if (redisContainer) await redisContainer.stop();
-  if (kafkaContainer) await kafkaContainer.stop();
-  if (network) await network.stop();
+  try {
+    const client = await pgPool.connect();
+    client.release();
+    console.log('PostgreSQL connected for tests');
+  } catch (err) {
+    console.warn('PostgreSQL not available, tests may fail:', err.message);
+  }
 });
 
-module.exports = {
-  getPostgresContainer: () => postgresContainer,
-  getRedisContainer: () => redisContainer,
-  getKafkaContainer: () => kafkaContainer
-};
+afterAll(async () => {
+  // Close connections
+  const { closeRedisConnection } = require('../src/db/redis');
+  const { closePool } = require('../src/db/postgres');
+  const { disconnectProducer } = require('../src/events/kafka-producer');
+
+  try {
+    await closeRedisConnection();
+  } catch (err) {
+    // Ignore
+  }
+
+  try {
+    await closePool();
+  } catch (err) {
+    // Ignore
+  }
+
+  try {
+    await disconnectProducer();
+  } catch (err) {
+    // Ignore
+  }
+});
+
+// Clean up Redis between tests
+beforeEach(async () => {
+  if (redisClient && redisClient.status === 'ready') {
+    // Clear test keys but preserve structure
+    const keys = await redisClient.keys('driver:*');
+    if (keys.length > 0) {
+      await redisClient.del(...keys);
+    }
+    const geoKeys = await redisClient.keys('drivers:locations:*');
+    if (geoKeys.length > 0) {
+      await redisClient.del(...geoKeys);
+    }
+  }
+});

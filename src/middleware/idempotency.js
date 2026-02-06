@@ -10,7 +10,7 @@ const idempotencyMiddleware = (options = {}) => {
   const {
     headerName = 'Idempotency-Key',
     required = true,
-    ttl = config.IDEMPOTENCY_TTL
+    ttl = config.IDEMPOTENCY_TTL,
   } = options;
 
   return async (req, res, next) => {
@@ -20,7 +20,7 @@ const idempotencyMiddleware = (options = {}) => {
       if (required) {
         return res.status(400).json({
           error: 'Missing idempotency key',
-          message: `Header '${headerName}' is required for this endpoint`
+          message: `Header '${headerName}' is required for this endpoint`,
         });
       }
       return next();
@@ -41,13 +41,13 @@ const idempotencyMiddleware = (options = {}) => {
         if (requestHash !== currentHash) {
           return res.status(422).json({
             error: 'Idempotency key conflict',
-            message: 'This key was used with a different request payload'
+            message: 'This key was used with a different request payload',
           });
         }
 
-        // Return cached response with indicator
+        // Return cached response with indicator (200 for replayed responses)
         res.set('X-Idempotency-Replayed', 'true');
-        return res.status(statusCode).json(body);
+        return res.status(200).json(body);
       }
 
       // Store request hash for conflict detection
@@ -62,10 +62,10 @@ const idempotencyMiddleware = (options = {}) => {
           statusCode: res.statusCode,
           body,
           requestHash: req.idempotencyRequestHash,
-          cachedAt: new Date().toISOString()
+          cachedAt: new Date().toISOString(),
         });
 
-        redis.set(cacheKey, cacheData, 'EX', ttl).catch(err => {
+        redis.set(cacheKey, cacheData, 'EX', ttl).catch((err) => {
           console.error('Failed to cache idempotent response:', err);
         });
 
@@ -87,9 +87,13 @@ const hashRequest = (req) => {
   const content = JSON.stringify({
     method: req.method,
     path: req.path,
-    body: req.body
+    body: req.body,
   });
-  return crypto.createHash('sha256').update(content).digest('hex').substring(0, 16);
+  return crypto
+    .createHash('sha256')
+    .update(content)
+    .digest('hex')
+    .substring(0, 16);
 };
 
 module.exports = idempotencyMiddleware;

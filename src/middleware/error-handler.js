@@ -4,16 +4,23 @@ const { z } = require('zod');
  * Global error handling middleware
  */
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  if (process.env.NODE_ENV !== 'test') {
+    console.error('Error:', err);
+  }
 
   // Zod validation errors
-  if (err instanceof z.ZodError) {
+  if (
+    err.name === 'ZodError' ||
+    err instanceof z.ZodError ||
+    (err.issues && Array.isArray(err.issues))
+  ) {
+    const issues = err.errors || err.issues || [];
     return res.status(400).json({
       error: 'Validation error',
-      details: err.errors.map(e => ({
-        field: e.path.join('.'),
-        message: e.message
-      }))
+      details: issues.map((e) => ({
+        field: (e.path || []).join('.'),
+        message: e.message,
+      })),
     });
   }
 
@@ -21,22 +28,25 @@ const errorHandler = (err, req, res, next) => {
   if (err.statusCode) {
     return res.status(err.statusCode).json({
       error: err.message,
-      code: err.code
+      code: err.code,
     });
   }
 
   // Database errors
-  if (err.code && err.code.startsWith('23')) {
+  if (err.code && typeof err.code === 'string' && err.code.startsWith('23')) {
     return res.status(409).json({
       error: 'Database constraint violation',
-      code: err.code
+      code: err.code,
     });
   }
 
   // Default server error
   res.status(500).json({
     error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    message:
+      process.env.NODE_ENV === 'development'
+        ? err.message
+        : 'Something went wrong',
   });
 };
 
@@ -46,7 +56,7 @@ const errorHandler = (err, req, res, next) => {
 const notFoundHandler = (req, res) => {
   res.status(404).json({
     error: 'Not found',
-    message: `Route ${req.method} ${req.path} not found`
+    message: `Route ${req.method} ${req.path} not found`,
   });
 };
 
@@ -72,5 +82,5 @@ module.exports = {
   errorHandler,
   notFoundHandler,
   asyncHandler,
-  AppError
+  AppError,
 };
