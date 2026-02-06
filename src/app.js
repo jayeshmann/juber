@@ -8,6 +8,11 @@ const { rateLimiter } = require('./middleware/rate-limiter');
 const { getRedisClient } = require('./db/redis');
 const { getPool } = require('./db/postgres');
 
+/*
+Location ingestion of driver -> using redis geo
+Rider requesting a ride, immediately find a driver, timeouts, race condition
+*/
+
 const createApp = async () => {
   const app = express();
 
@@ -26,7 +31,9 @@ const createApp = async () => {
     res.on('finish', () => {
       const duration = Date.now() - start;
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+        console.log(
+          `${req.method} ${req.path} ${res.statusCode} ${duration}ms`,
+        );
       }
     });
     next();
@@ -45,18 +52,20 @@ const createApp = async () => {
     res.json({
       name: 'Juber Ride-Hailing Platform',
       version: '1.0.0',
-      docs: '/api/v1/health'
+      docs: '/api/v1/health',
     });
   });
 
   // Metrics endpoint (for observability)
   app.get('/metrics', async (req, res) => {
-    const { getAllCircuitBreakerStatuses } = require('./middleware/circuit-breaker');
+    const {
+      getAllCircuitBreakerStatuses,
+    } = require('./middleware/circuit-breaker');
 
     res.json({
       uptime: process.uptime(),
       memory: process.memoryUsage(),
-      circuitBreakers: getAllCircuitBreakerStatuses()
+      circuitBreakers: getAllCircuitBreakerStatuses(),
     });
   });
 

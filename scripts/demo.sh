@@ -50,6 +50,7 @@ echo "---------------------------------------------"
 curl -s -X POST "$BASE_URL/surge/calculate" \
   -H "Content-Type: application/json" \
   -d '{
+    "geoCell": "h3_81297177594ffffff",
     "latitude": 12.9716,
     "longitude": 77.5946,
     "region": "bangalore"
@@ -59,9 +60,10 @@ echo ""
 # 6. Create Ride Request
 echo "6️⃣  CREATE RIDE REQUEST (Rider requests a ride)"
 echo "---------------------------------------------"
+IDEMPOTENCY_KEY="demo-ride-$(date +%s)"
 RIDE_RESPONSE=$(curl -s -X POST "$BASE_URL/rides" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: demo-ride-$(date +%s)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   -d '{
     "riderId": "a1000000-0000-0000-0000-000000000001",
     "pickup": {"lat": 12.9716, "lng": 77.5946},
@@ -73,8 +75,14 @@ echo "$RIDE_RESPONSE" | jq .
 RIDE_ID=$(echo "$RIDE_RESPONSE" | jq -r '.id')
 echo ""
 
-# 7. Driver Accepts Ride
-echo "7️⃣  DRIVER ACCEPTS RIDE"
+# 7. Get Ride Details
+echo "7️⃣  GET RIDE DETAILS"
+echo "---------------------------------------------"
+curl -s "$BASE_URL/rides/$RIDE_ID" | jq .
+echo ""
+
+# 8. Driver Accepts Ride
+echo "8️⃣  DRIVER ACCEPTS RIDE"
 echo "---------------------------------------------"
 curl -s -X POST "$BASE_URL/rides/$RIDE_ID/driver-response" \
   -H "Content-Type: application/json" \
@@ -84,8 +92,8 @@ curl -s -X POST "$BASE_URL/rides/$RIDE_ID/driver-response" \
   }' | jq .
 echo ""
 
-# 8. Create Trip
-echo "8️⃣  CREATE TRIP (From accepted ride)"
+# 9. Create Trip
+echo "9️⃣  CREATE TRIP (From accepted ride)"
 echo "---------------------------------------------"
 TRIP_RESPONSE=$(curl -s -X POST "$BASE_URL/trips" \
   -H "Content-Type: application/json" \
@@ -94,8 +102,8 @@ echo "$TRIP_RESPONSE" | jq .
 TRIP_ID=$(echo "$TRIP_RESPONSE" | jq -r '.id')
 echo ""
 
-# 9. Start Trip
-echo "9️⃣  START TRIP (Driver picks up rider)"
+# 10. Start Trip
+echo "🔟  START TRIP (Driver picks up rider)"
 echo "---------------------------------------------"
 curl -s -X POST "$BASE_URL/trips/$TRIP_ID/start" \
   -H "Content-Type: application/json" \
@@ -105,8 +113,8 @@ curl -s -X POST "$BASE_URL/trips/$TRIP_ID/start" \
   }' | jq .
 echo ""
 
-# 10. End Trip
-echo "🔟  END TRIP (Reach destination)"
+# 11. End Trip
+echo "1️⃣1️⃣  END TRIP (Reach destination)"
 echo "---------------------------------------------"
 curl -s -X POST "$BASE_URL/trips/$TRIP_ID/end" \
   -H "Content-Type: application/json" \
@@ -118,7 +126,7 @@ curl -s -X POST "$BASE_URL/trips/$TRIP_ID/end" \
   }' | jq .
 echo ""
 
-# 11. Get Trip Receipt
+# 12. Get Trip Receipt
 echo "🧾  GET TRIP RECEIPT"
 echo "---------------------------------------------"
 curl -s "$BASE_URL/trips/$TRIP_ID/receipt" | jq .
@@ -131,4 +139,23 @@ echo ""
 echo "Key IDs for further testing:"
 echo "  Ride ID: $RIDE_ID"
 echo "  Trip ID: $TRIP_ID"
+echo ""
+echo "============================================="
+echo "📋 INDIVIDUAL CURLS FOR COPY-PASTE:"
+echo "============================================="
+echo ""
+echo "# Health Check"
+echo "curl -s $BASE_URL/health | jq ."
+echo ""
+echo "# Update Driver Location"
+echo "curl -s -X POST $BASE_URL/drivers/d1000000-0000-0000-0000-000000000001/location -H 'Content-Type: application/json' -d '{\"latitude\": 12.9716, \"longitude\": 77.5946}' | jq ."
+echo ""
+echo "# Find Nearby Drivers"
+echo "curl -s '$BASE_URL/drivers/nearby?latitude=12.9716&longitude=77.5946&radiusKm=5&region=bangalore' | jq ."
+echo ""
+echo "# Get Surge"
+echo "curl -s -X POST $BASE_URL/surge/calculate -H 'Content-Type: application/json' -d '{\"geoCell\": \"h3_81297177594ffffff\", \"latitude\": 12.9716, \"longitude\": 77.5946, \"region\": \"bangalore\"}' | jq ."
+echo ""
+echo "# Create Ride"
+echo "curl -s -X POST $BASE_URL/rides -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-\$(date +%s)' -d '{\"riderId\": \"a1000000-0000-0000-0000-000000000001\", \"pickup\": {\"lat\": 12.9716, \"lng\": 77.5946}, \"destination\": {\"lat\": 12.98, \"lng\": 77.61}, \"tier\": \"ECONOMY\", \"paymentMethod\": \"CARD\"}' | jq ."
 echo ""
